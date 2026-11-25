@@ -1,12 +1,12 @@
 <template>
-	<Card :title="sponsor ? 'Explanation' : 'Feedback'" edge-to-edge class="box-pull-out">
-		<template v-if="sponsor" #actions>
+	<Card :title="canExplain ? 'Explanation' : 'Feedback'" edge-to-edge class="box-pull-out">
+		<template v-if="canExplain && hosted" #actions>
 			<a href="https://evcc.io/en/datenschutz/" target="_blank" class="small text-muted"
 				>Privacy</a
 			>
 		</template>
-		<template v-if="sponsor">
-			<p v-if="error" class="text-danger">{{ error }}</p>
+		<template v-if="canExplain">
+			<p v-if="errorMessage" class="text-danger">{{ errorMessage }}</p>
 			<template v-if="recent">
 				<MarkdownRenderer :markdown="explanation" class="explanation mb-3" />
 				<div
@@ -27,7 +27,7 @@
 							{{ explaining ? "Updating explanation…" : "Update explanation" }}
 						</button>
 					</span>
-					<span class="text-nowrap">
+					<span v-if="hosted" class="text-nowrap">
 						<template v-if="voteSent">Thanks for the feedback.</template>
 						<template v-else-if="!vote">
 							Helpful?
@@ -53,9 +53,11 @@
 						</template>
 					</span>
 				</div>
-				<small v-if="voteError" class="d-block text-danger mt-2">{{ voteError }}</small>
+				<small v-if="hosted && voteError" class="d-block text-danger mt-2">{{
+					voteError
+				}}</small>
 				<form
-					v-if="vote === 'down' && !voteSent"
+					v-if="hosted && vote === 'down' && !voteSent"
 					class="d-flex gap-2 mt-3"
 					@submit.prevent="sendFeedback('down')"
 				>
@@ -97,7 +99,11 @@
 				</div>
 			</template>
 		</template>
-		<p class="small text-muted mb-0" :class="{ 'border-top mt-4 pt-3': sponsor }">
+		<p
+			v-if="hosted"
+			class="small text-muted mb-0"
+			:class="{ 'border-top mt-4 pt-3': canExplain }"
+		>
 			Unexpected results or implausible numbers?
 			<a href="https://github.com/evcc-io/optimizer/issues" target="_blank">Open an issue</a>
 			and attach the request and response below.
@@ -124,6 +130,7 @@ export default defineComponent({
 	mixins: [formatter, minuteTicker],
 	props: {
 		sponsor: Boolean,
+		hosted: { type: Boolean, default: true }, // false: self-hosted optimizer, no sponsorship and no feedback
 		explained: Object as PropType<EvOptExplanation>,
 		plan: { type: String, default: "" }, // updated time of the current plan
 		explaining: Boolean,
@@ -140,6 +147,13 @@ export default defineComponent({
 		};
 	},
 	computed: {
+		canExplain(): boolean {
+			return this.sponsor || !this.hosted;
+		},
+		errorMessage(): string {
+			if (!this.error || this.hosted) return this.error;
+			return this.$t("optimize.explainFailed", { error: this.error });
+		},
 		explanation(): string {
 			return this.explained?.explanation ?? "";
 		},

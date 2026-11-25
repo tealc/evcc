@@ -2034,7 +2034,8 @@
     "away": "abwesend",
     "awayEnergy": "Verbrauch unterwegs",
     "awayLegend": "Abwesend – {vehicle}",
-    "awayRow": "Abwesend"
+    "awayRow": "Abwesend",
+    "explainFailed": "Dein Optimizer konnte den Plan nicht erklären: {error}"
   },
   "passwordModal": {
     "empty": "Passwort darf nicht leer sein",

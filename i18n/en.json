@@ -2034,7 +2034,8 @@
     "away": "away",
     "awayEnergy": "Used while away",
     "awayLegend": "Away – {vehicle}",
-    "awayRow": "Away"
+    "awayRow": "Away",
+    "explainFailed": "Your optimizer could not explain the plan: {error}"
   },
   "passwordModal": {
     "empty": "Password should not be empty",

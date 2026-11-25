@@ -25,6 +25,10 @@ The owner does not write Vue or Go. Explain changes in plain German, keep the fo
 3. `Vehicle absences: UI for per-vehicle absence windows`: `assets/js/components/ChargingPlans/*Absence*`, `absences.ts`, the absence section in the charging plan modal, vehicle selector when no vehicle is connected.
 4. `Vehicle absences: show away slots on the optimizer page`: hatched away bands (`markArea`) in the Charging Plan, tooltip row, legend entry and away rows in the timeline table, read from `details.batteryDetails[].cAvail/eAway`.
 5. `Fork: image build and agent notes`: `.github/workflows/fork-image.yml` and this file.
+6. `Optimizer: explain button with a self-hosted optimizer`
+   - `PlanExplanation.vue` shows the explain button for a self-hosted optimizer too (`hosted` prop, from `evopt.hosted`), no sponsorship needed. The request already goes to `OPTIMIZER_URI` without the sponsor token, keep it that way.
+   - Feedback (thumbs, `/optimize/explain/feedback`), privacy link and the evcc-io issue link are hidden when self-hosted. Errors from the optimizer (e.g. no API key) show as `optimize.explainFailed` in the card.
+   - Frontend only.
 
 Keep fork commits few and focused, so rebasing stays cheap. New fork work gets its own commit. Fixes to an existing fork feature are folded into that commit: `git commit --fixup=<sha>`, then `GIT_SEQUENCE_EDITOR=true git rebase -i --autosquash upstream/master`.
 

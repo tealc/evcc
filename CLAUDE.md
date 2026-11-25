@@ -4,6 +4,10 @@ Read @AGENTS.md for the project itself. This file only covers the fork.
 
 The owner does not write Vue or Go. Explain changes in plain German, keep the fork small, and verify everything yourself (lint, type check, tests, build) before pushing.
 
+## Two repos: evcc and optimizer
+
+The agent develops both evcc (this repo) and the self-hosted optimizer (`tealc/optimizer`, branch `custom`). For every change, decide which side it belongs to and say so with the reason before editing. Logic, error messages and API behaviour of the optimizer belong in the optimizer. evcc only gets what it must send, show or relay. Do not work around optimizer behaviour in evcc.
+
 ## Branches
 
 - `master` mirrors `evcc-io/evcc` master. Never commit to it.

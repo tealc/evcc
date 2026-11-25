@@ -2388,6 +2388,49 @@
         }
       }
     },
+    "/vehicles/{name}/absences": {
+      "post": {
+        "operationId": "updateVehicleAbsences",
+        "summary": "Update absences",
+        "description": "Replaces the vehicle's absence windows. The optimizer does not charge the vehicle while it is away.",
+        "tags": [
+          "vehicles"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/vehicleName"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Absence"
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Absence"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/vehicles/{name}/plan/repeating": {
       "post": {
         "operationId": "updateVehicleRepeatingPlans",
@@ -3247,6 +3290,77 @@
   },
   "components": {
     "schemas": {
+      "Absence": {
+        "description": "A time window during which a vehicle is away and cannot be charged.",
+        "type": "object",
+        "properties": {
+          "id": {
+            "description": "Client-generated id, unique per vehicle.",
+            "type": "string"
+          },
+          "active": {
+            "description": "Absence is active.",
+            "type": "boolean"
+          },
+          "occasion": {
+            "description": "Occasion of the absence.",
+            "type": "string",
+            "enum": [
+              "work",
+              "school",
+              "shopping",
+              "sport",
+              "visit",
+              "trip",
+              "vacation",
+              "other"
+            ]
+          },
+          "repeat": {
+            "description": "Weekly absence if true, one-time absence otherwise.",
+            "type": "boolean"
+          },
+          "weekdays": {
+            "description": "Repeat only. Weekdays the absence starts on. 0 is Sunday, 6 is Saturday.",
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          },
+          "start": {
+            "description": "Repeat only. Start time in HH:MM format, aligned to 15 minutes.",
+            "type": "string"
+          },
+          "end": {
+            "description": "Repeat only. End time in HH:MM format, aligned to 15 minutes. An end at or before start ends the next day.",
+            "type": "string"
+          },
+          "from": {
+            "description": "One-time only. Start as RFC3339 timestamp, aligned to 15 minutes.",
+            "type": "string"
+          },
+          "to": {
+            "description": "One-time only. End as RFC3339 timestamp, aligned to 15 minutes, after from.",
+            "type": "string"
+          },
+          "tz": {
+            "description": "Time zone of a repeating absence, like Europe/Berlin.",
+            "type": "string"
+          },
+          "energy": {
+            "description": "Expected energy used while away in kWh. 0 is unknown.",
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "active",
+          "occasion",
+          "repeat",
+          "tz",
+          "energy"
+        ]
+      },
       "ChangePassword": {
         "type": "object",
         "properties": {
@@ -5618,6 +5732,13 @@
             "$ref": "#/components/schemas/PlanStrategy",
             "description": "Charging plan strategy."
           },
+          "absences": {
+            "description": "Absence windows of the vehicle.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Absence"
+            }
+          },
           "title": {
             "description": "Vehicle title for UI display.",
             "type": "string"
@@ -5645,6 +5766,7 @@
         "required": [
           "repeatingPlans",
           "planStrategy",
+          "absences",
           "title"
         ]
       },

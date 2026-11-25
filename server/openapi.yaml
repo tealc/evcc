@@ -1447,6 +1447,32 @@ paths:
                 properties:
                   alwaysCharge:
                     $ref: "#/components/schemas/VehicleAlwaysCharge"
+  /vehicles/{name}/absences:
+    post:
+      operationId: updateVehicleAbsences
+      summary: Update absences
+      description: "Replaces the vehicle's absence windows. The optimizer does not charge the vehicle while it is away."
+      tags:
+        - vehicles
+      parameters:
+        - $ref: "#/components/parameters/vehicleName"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: "./openapi.state.yaml#/components/schemas/Absence"
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "./openapi.state.yaml#/components/schemas/Absence"
   /vehicles/{name}/plan/repeating:
     post:
       operationId: updateVehicleRepeatingPlans

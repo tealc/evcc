@@ -3,6 +3,7 @@ package core
 import (
 	"errors"
 	"math"
+	"slices"
 	"testing"
 	"time"
 
@@ -1453,4 +1454,138 @@ func TestValidateDemand(t *testing.T) {
 		err := validateDemand(dt, []float32{tc.energy}, ts)
 		assert.Equal(t, tc.ok, err == nil, "%g Wh", tc.energy)
 	}
+}
+
+func TestApplyAbsences(t *testing.T) {
+	// slot 0 is 12:10-12:15, slot i ends at 12:15 + i*15min
+	now := time.Date(2025, 1, 1, 12, 10, 0, 0, time.UTC)
+	at := func(hour, minute int) time.Time { return time.Date(2025, 1, 1, hour, minute, 0, 0, time.UTC) }
+	const minLen = 8
+
+	for _, tc := range []struct {
+		name     string
+		absences []api.AbsenceInterval
+		goal     map[int]float32 // input s_goal
+		count    int
+		avail    []float32
+		away     []float32
+		resGoal  []float32
+		demand   []float32
+	}{
+		{
+			name:     "absent slots, goal moves before leaving",
+			absences: []api.AbsenceInterval{{Start: at(12, 45), End: at(13, 30), Energy: 3}},
+			goal:     map[int]float32{4: 30000},
+			count:    3,
+			avail:    []float32{1, 1, 1, 0, 0, 0, 1, 1},
+			away:     []float32{0, 0, 0, 1000, 1000, 1000, 0, 0},
+			resGoal:  []float32{0, 0, 30000, 0, 0, 0, 0, 0},
+			demand:   []float32{100, 100, 100, 0, 0, 0, 100, 100},
+		},
+		{
+			name:     "partial overlap makes a slot absent, goal after the absence stays",
+			absences: []api.AbsenceInterval{{Start: at(12, 50), End: at(13, 5)}},
+			goal:     map[int]float32{7: 20000},
+			count:    2,
+			avail:    []float32{1, 1, 1, 0, 0, 1, 1, 1},
+			away:     make([]float32, minLen),
+			resGoal:  []float32{0, 0, 0, 0, 0, 0, 0, 20000},
+			demand:   []float32{100, 100, 100, 0, 0, 100, 100, 100},
+		},
+		{
+			name: "two absences, goal keeps the higher value in the target slot",
+			absences: []api.AbsenceInterval{
+				{Start: at(12, 30), End: at(12, 45), Energy: 1},
+				{Start: at(13, 0), End: at(14, 0), Energy: 2},
+			},
+			goal:    map[int]float32{0: 25000, 5: 30000},
+			count:   5,
+			avail:   []float32{1, 1, 0, 1, 0, 0, 0, 0},
+			away:    []float32{0, 0, 1000, 0, 500, 500, 500, 500},
+			resGoal: []float32{25000, 0, 0, 30000, 0, 0, 0, 0},
+			demand:  []float32{100, 100, 0, 100, 0, 0, 0, 0},
+		},
+		{
+			name:     "no available slot before the absence drops the goal",
+			absences: []api.AbsenceInterval{{Start: at(12, 12), End: at(15, 0)}},
+			goal:     map[int]float32{3: 30000},
+			count:    minLen,
+			avail:    make([]float32, minLen),
+			away:     make([]float32, minLen),
+			resGoal:  make([]float32, minLen),
+			demand:   make([]float32, minLen),
+		},
+		{
+			name:     "absence containing now is ignored",
+			absences: []api.AbsenceInterval{{Start: at(12, 0), End: at(13, 0), Energy: 5}},
+			goal:     map[int]float32{2: 30000},
+		},
+		{
+			name:     "absence beyond horizon",
+			absences: []api.AbsenceInterval{{Start: at(14, 0), End: at(15, 0), Energy: 5}},
+			goal:     map[int]float32{2: 30000},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			bat := optimizer.BatteryConfig{
+				PDemand: lo.RepeatBy(minLen, func(int) float32 { return 100 }),
+				SGoal:   make([]float32, minLen),
+			}
+			for i, g := range tc.goal {
+				bat.SGoal[i] = g
+			}
+			orig := bat
+			orig.PDemand = slices.Clone(bat.PDemand)
+			orig.SGoal = slices.Clone(bat.SGoal)
+
+			var detail batteryDetail
+			count := applyAbsences(&bat, &detail, tc.absences, now, minLen)
+			assert.Equal(t, tc.count, count)
+
+			if tc.count == 0 {
+				assert.Equal(t, orig, bat, "request unchanged without absent slots")
+				assert.Equal(t, batteryDetail{}, detail, "detail unchanged without absent slots")
+				return
+			}
+
+			assert.Equal(t, tc.avail, detail.CAvail)
+			assert.InDeltaSlice(t, tc.away, detail.EAway, 0.01)
+			assert.Equal(t, tc.resGoal, bat.SGoal)
+			assert.Equal(t, tc.demand, bat.PDemand)
+		})
+	}
+}
+
+func TestCoarsenHorizonAbsences(t *testing.T) {
+	now := time.Date(2025, 1, 1, 7, 23, 0, 0, time.Local)
+	minLen := 1 + 4*60
+	dt := timeSteps(minLen, now)
+	ts := asTimestamps(dt, now)
+
+	series := func(v float32) []float32 { return lo.RepeatBy(minLen, func(int) float32 { return v }) }
+
+	// slot 195 starts the first clock hour 08:00 on Jan 3rd, merging slots 195-198
+	avail, away := series(1), series(0)
+	avail[196] = 0
+	for i := 195; i < 199; i++ {
+		away[i] = 10
+	}
+
+	req := optimizer.OptimizationInput{
+		TimeSeries: optimizer.TimeSeries{Dt: dt, Gt: series(1), Ft: series(1), PN: series(0.3), PE: series(0.1)},
+		Batteries:  []optimizer.BatteryConfig{{}, {}},
+	}
+	details := requestDetails{Timestamps: ts, BatteryDetails: []batteryDetail{{CAvail: avail, EAway: away}, {}}}
+
+	coarsenHorizon(&req, &details, defaultCoarseSlotsAfter)
+
+	b := details.BatteryDetails[0]
+	require.Len(t, b.CAvail, len(req.TimeSeries.Dt))
+	require.Len(t, b.EAway, len(req.TimeSeries.Dt))
+	assert.Equal(t, time.Date(2025, 1, 3, 8, 0, 0, 0, time.Local), details.Timestamps[195])
+	assert.Equal(t, []float32{1, 0, 1}, b.CAvail[194:197], "merged slot unavailable if any slot is")
+	assert.Equal(t, float32(40), b.EAway[195], "away energy summed")
+	assert.Equal(t, float32(40), lo.Sum(b.EAway))
+	assert.Nil(t, details.BatteryDetails[1].CAvail)
+	assert.Nil(t, details.BatteryDetails[1].EAway)
 }

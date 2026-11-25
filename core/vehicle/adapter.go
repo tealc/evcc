@@ -3,6 +3,7 @@ package vehicle
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/evcc-io/evcc/api"
@@ -234,6 +235,58 @@ func (v *adapter) SetPlanStrategy(planStrategy api.PlanStrategy) error {
 
 	v.publish()
 	v.requestUpdate()
+
+	return nil
+}
+
+// GetAbsences returns every absence, excluding expired one-time absences
+func (v *adapter) GetAbsences() []api.Absence {
+	var absences []api.Absence
+	if err := settings.Json(v.key()+keys.Absences, &absences); err != nil || absences == nil {
+		return []api.Absence{}
+	}
+
+	now := time.Now()
+	return slices.DeleteFunc(absences, func(a api.Absence) bool {
+		return a.Expired(now)
+	})
+}
+
+// SetAbsences validates and stores every absence
+func (v *adapter) SetAbsences(absences []api.Absence) error {
+	if err := validateAbsences(absences); err != nil {
+		return err
+	}
+
+	if absences == nil {
+		absences = []api.Absence{}
+	}
+
+	if err := settings.SetJson(v.key()+keys.Absences, absences); err != nil {
+		return err
+	}
+
+	v.log.DEBUG.Printf("update absences for %s to: %v", v.name, absences)
+
+	v.publish()
+	v.requestUpdate()
+
+	return nil
+}
+
+// validateAbsences validates each absence and the uniqueness of their ids
+func validateAbsences(absences []api.Absence) error {
+	ids := make(map[string]struct{}, len(absences))
+
+	for _, a := range absences {
+		if err := a.Validate(); err != nil {
+			return fmt.Errorf("absence %q: %w", a.Id, err)
+		}
+		if _, ok := ids[a.Id]; ok {
+			return fmt.Errorf("duplicate absence id: %q", a.Id)
+		}
+		ids[a.Id] = struct{}{}
+	}
 
 	return nil
 }

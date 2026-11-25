@@ -1,6 +1,7 @@
 package core
 
 import (
+	"bytes"
 	"cmp"
 	"context"
 	"encoding/json"
@@ -79,6 +80,10 @@ type batteryDetail struct {
 	SocUnknown bool        `json:"socUnknown,omitempty"`
 
 	PlanGoals []loadpoint.PlanGoal `json:"planGoals,omitempty"` // vehicle plan goals within the horizon, not capped at the limit
+
+	// vehicle absences per request slot, sent as c_avail and e_away (see optimizerRequestBody)
+	CAvail []float32 `json:"cAvail,omitempty"` // availability, 1 = available, 0 = away
+	EAway  []float32 `json:"eAway,omitempty"`  // energy used while away (Wh)
 
 	loadpoint    *int              // originating loadpoint id for loadpoint/vehicle entries
 	controllable bool              // device can act on suggestions
@@ -247,7 +252,12 @@ func (site *Site) optimizerUpdate(battery []types.Measurement) error {
 		return err
 	}
 
-	resp, err := apiClient.PostOptimizeChargeScheduleWithResponse(context.TODO(), req, func(_ context.Context, req *http.Request) error {
+	body, err := optimizerRequestBody(req, details)
+	if err != nil {
+		return err
+	}
+
+	resp, err := apiClient.PostOptimizeChargeScheduleWithBodyWithResponse(context.TODO(), "application/json", bytes.NewReader(body), func(_ context.Context, req *http.Request) error {
 		optimizerAuth(req)
 		return nil
 	})

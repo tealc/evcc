@@ -224,6 +224,34 @@ func addRepeatingPlansHandler(site site.API) http.HandlerFunc {
 	}
 }
 
+// updateAbsencesHandler replaces the vehicle's absences
+func updateAbsencesHandler(site site.API) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		vars := mux.Vars(r)
+
+		v, err := site.Vehicles().ByName(vars["name"])
+		if err != nil {
+			jsonError(w, http.StatusBadRequest, err)
+			return
+		}
+
+		var req []api.Absence
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			jsonError(w, http.StatusBadRequest, err)
+			return
+		}
+
+		if err := v.SetAbsences(req); err != nil {
+			jsonError(w, http.StatusBadRequest, err)
+			return
+		}
+
+		site.Optimize()
+
+		jsonWrite(w, v.GetAbsences())
+	}
+}
+
 // planSocRemoveHandler removes plan soc and time
 func planSocRemoveHandler(site site.API) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {

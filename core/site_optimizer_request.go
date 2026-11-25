@@ -13,6 +13,7 @@ import (
 	"github.com/evcc-io/evcc/core/loadpoint"
 	"github.com/evcc-io/evcc/core/metrics"
 	"github.com/evcc-io/evcc/core/types"
+	"github.com/evcc-io/evcc/core/vehicle"
 	"github.com/evcc-io/evcc/hems/hems"
 	"github.com/evcc-io/evcc/tariff"
 	"github.com/evcc-io/evcc/util/config"
@@ -397,7 +398,95 @@ func (site *Site) loadpointRequest(lp loadpoint.API, minLen int, firstSlotDurati
 		bat.PDemand = clearDemandWhenFull(prorate(demand, firstSlotDuration), bat.SMax-bat.SInitial)
 	}
 
+	// the vehicle is away and cannot charge during its absences
+	now := time.Now()
+	horizon := now.Truncate(tariff.SlotDuration).Add(time.Duration(minLen) * tariff.SlotDuration)
+	if absences := api.AbsenceIntervals(vehicle.Settings(site.log, v).GetAbsences(), now, horizon); len(absences) > 0 {
+		if n := applyAbsences(&bat, &detail, absences, now, minLen); n > 0 {
+			site.log.DEBUG.Printf("optimizer: %s away for %d slots", detail.Title, n)
+		}
+	}
+
 	return bat, detail
+}
+
+// applyAbsences marks the slots overlapping an absence as unavailable and returns their number.
+// An absence containing now is ignored, since the vehicle is connected. The absence energy (kWh) is
+// spread evenly over its slots, plan goals in absent slots move to the last available slot before
+// the absence and the charge demand is cleared while away. The availability (c_avail) and away
+// energy (e_away) series are stored in detail, they are added to the request body by
+// optimizerRequestBody since the optimizer client has no such fields. Without absent slots bat
+// and detail are unchanged.
+func applyAbsences(bat *optimizer.BatteryConfig, detail *batteryDetail, absences []api.AbsenceInterval, now time.Time, minLen int) int {
+	absent := make([]bool, minLen)
+	away := make([]float32, minLen)
+	var count int
+
+	// slot i covers [eos+(i-1)*SlotDuration, eos+i*SlotDuration), slot 0 starts now
+	eos := now.Truncate(tariff.SlotDuration).Add(tariff.SlotDuration)
+
+	for _, a := range absences {
+		// reality wins: the vehicle is connected
+		if !now.Before(a.Start) && now.Before(a.End) {
+			continue
+		}
+
+		var slots []int
+		for i := range minLen {
+			start, end := eos.Add(time.Duration(i-1)*tariff.SlotDuration), eos.Add(time.Duration(i)*tariff.SlotDuration)
+			if i == 0 {
+				start = now
+			}
+			if start.Before(a.End) && end.After(a.Start) {
+				slots = append(slots, i)
+			}
+		}
+
+		for _, i := range slots {
+			if !absent[i] {
+				absent[i] = true
+				count++
+			}
+			away[i] += float32(a.Energy * 1e3 / float64(len(slots)))
+		}
+	}
+
+	if count == 0 {
+		return 0
+	}
+
+	// a goal in an absent slot must be reached before leaving, else it is dropped
+	for i, g := range bat.SGoal {
+		if g == 0 || i >= minLen || !absent[i] {
+			continue
+		}
+
+		bat.SGoal[i] = 0
+
+		j := i
+		for j >= 0 && absent[j] {
+			j--
+		}
+		if j >= 0 {
+			bat.SGoal[j] = max(bat.SGoal[j], g)
+		}
+	}
+
+	for i := range bat.PDemand {
+		if i < minLen && absent[i] {
+			bat.PDemand[i] = 0
+		}
+	}
+
+	detail.CAvail = lo.Map(absent, func(a bool, _ int) float32 {
+		if a {
+			return 0
+		}
+		return 1
+	})
+	detail.EAway = away
+
+	return count
 }
 
 // circuitMaxImport returns the circuit's import limit from max power incl. HEMS limit and three-phase max current, 0 if unlimited
@@ -839,6 +928,14 @@ func coarsenHorizon(req *optimizer.OptimizationInput, details *requestDetails, a
 		if b.SGoal != nil {
 			// a goal ends its group, so it sits in the group's last slot
 			b.SGoal = lo.Map(starts, func(s, g int) float32 { return b.SGoal[ends[g]-1] })
+		}
+	}
+	for i := range details.BatteryDetails {
+		d := &details.BatteryDetails[i]
+		d.EAway = sum(d.EAway)
+		if d.CAvail != nil {
+			// a merged slot is unavailable if any of its slots is
+			d.CAvail = lo.Map(starts, func(s, g int) float32 { return lo.Min(d.CAvail[s:ends[g]]) })
 		}
 	}
 	for i := range details.DemandDetails {

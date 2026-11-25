@@ -47,4 +47,9 @@ type API interface {
 	GetPlanStrategy() api.PlanStrategy
 	// SetPlanStrategy sets the plan strategy
 	SetPlanStrategy(api.PlanStrategy) error
+
+	// GetAbsences returns every absence, excluding expired one-time absences
+	GetAbsences() []api.Absence
+	// SetAbsences stores every absence
+	SetAbsences([]api.Absence) error
 }

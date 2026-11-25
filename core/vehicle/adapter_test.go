@@ -59,3 +59,35 @@ func TestAdapterGetModeMigratesLegacy(t *testing.T) {
 		assert.Equal(t, "smart", s, "migration persisted")
 	}
 }
+
+func TestAdapterAbsences(t *testing.T) {
+	v := &adapter{log: util.NewLogger("foo"), name: "absences"}
+
+	assert.Equal(t, []api.Absence{}, v.GetAbsences(), "never nil")
+
+	weekly := api.Absence{Id: "a", Active: true, Occasion: "work", Repeat: true, Weekdays: []int{1, 2, 3, 4, 5}, Start: "07:30", End: "17:15", Tz: "Europe/Berlin"}
+	expired := api.Absence{Id: "b", Active: true, Occasion: "trip", From: "2020-12-24T08:00:00+01:00", To: "2020-12-27T18:00:00+01:00", Tz: "Europe/Berlin"}
+	future := api.Absence{Id: "c", Active: true, Occasion: "vacation", From: "2099-12-24T08:00:00+01:00", To: "2099-12-27T18:00:00+01:00", Tz: "Europe/Berlin", Energy: 12.5}
+
+	for _, tc := range []struct {
+		name     string
+		absences []api.Absence
+		valid    bool
+	}{
+		{"empty", nil, true},
+		{"valid", []api.Absence{weekly, future}, true},
+		{"duplicate id", []api.Absence{weekly, func() api.Absence { a := future; a.Id = "a"; return a }()}, false},
+		{"invalid entry", []api.Absence{weekly, func() api.Absence { a := future; a.Occasion = ""; return a }()}, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.valid, v.SetAbsences(tc.absences) == nil)
+		})
+	}
+
+	// invalid lists leave the stored list untouched
+	assert.Equal(t, []api.Absence{weekly, future}, v.GetAbsences())
+
+	// expired one-time absences are dropped on read
+	assert.NoError(t, v.SetAbsences([]api.Absence{weekly, expired, future}))
+	assert.Equal(t, []api.Absence{weekly, future}, v.GetAbsences())
+}

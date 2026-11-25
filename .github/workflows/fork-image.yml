@@ -1,0 +1,62 @@
+# Fork only: tests the custom branch and builds it into ghcr.io/<owner>/<repo>:custom for the home NAS.
+name: Fork image
+
+on:
+  push:
+    branches: [custom]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  go:
+    if: github.repository_owner != 'evcc-io'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: go.mod
+      - run: mkdir dist && touch dist/empty
+      - run: go vet ./...
+      - run: make test
+
+  ui:
+    if: github.repository_owner != 'evcc-io'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: voidzero-dev/setup-vp@cab1ab9eaff52d4857875f4f2c016e36af8f2c76 # v1.22.0
+        with:
+          node-version-file: ".node-version"
+      - run: make install-ui
+      - run: make lint-ui
+      - run: make test-ui
+
+  image:
+    needs: [go, ui]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+      - name: Image name
+        run: echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: linux/amd64
+          push: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          tags: |
+            ${{ env.IMAGE }}:custom
+            ${{ env.IMAGE }}:custom-${{ github.sha }}

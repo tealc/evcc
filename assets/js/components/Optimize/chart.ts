@@ -1,4 +1,5 @@
-import { boundarySeries, hoverDot, xAxisLabelStyle } from "../Forecast/echarts";
+import { hoverDot } from "../Forecast/echarts";
+import colors from "@/colors";
 import type { DemandDetail } from "@/types/evcc";
 
 export type Titled = { title?: string; name?: string };
@@ -27,35 +28,6 @@ export function slotTimes(timestamp: string, dt: number[]): number[] {
   return res;
 }
 
-export function isMidnight(time?: number): boolean {
-  if (time === undefined) return false;
-  const d = new Date(time);
-  return d.getHours() === 0 && d.getMinutes() === 0;
-}
-
-// category x axis over slot times, labels at full hours every 4h (6h on mobile),
-// weekday shown at 00:00
-export function slotXAxis(times: number[], weekdayShort: (d: Date) => string) {
-  const step = window.innerWidth < 576 ? 6 : 4;
-  return {
-    type: "category",
-    data: times.map(String),
-    axisLine: { show: false },
-    axisTick: { show: false },
-    splitLine: { show: false },
-    axisLabel: {
-      ...xAxisLabelStyle(),
-      interval: 0,
-      formatter: (value: string) => {
-        const d = new Date(Number(value));
-        if (d.getMinutes() !== 0 || d.getHours() % step !== 0) return "";
-        const label = String(d.getHours());
-        return d.getHours() === 0 ? `${label}\n${weekdayShort(d)}` : label;
-      },
-    },
-  };
-}
-
 const QUARTER_SECONDS = 15 * 60;
 
 // source slot index per chart slot: a slot longer than a quarter hour is shown as equal
@@ -74,14 +46,6 @@ export function splitSlots(values: number[], parents: number[]): number[] {
   return parents.map((p) => (values[p] ?? 0) / (count[p] ?? 1));
 }
 
-export function formatSlotRange(times: number[], dt: number[], index: number): string {
-  const start = new Date(times[index] ?? 0);
-  const end = new Date(start.getTime() + (dt[index] || 0) * 1000);
-  const f = (d: Date) =>
-    `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-  return `${f(start)} - ${f(end)}`;
-}
-
 // hover dot created on demand: a hidden symbol per slot makes the svg renderer re-insert all
 // of them on every hover frame. The temporary dot only drops when new data re-renders the chart.
 export function transientHoverDot(color: string) {
@@ -93,8 +57,29 @@ export function whToKW(wh: number, dtSeconds: number): number {
   return wh / (dtSeconds / 3600) / 1000;
 }
 
-// day boundary lines. A category split line would sit in the gap between bars
-// and show as a sliver; this draws them just inside the bar's left edge, behind the bars.
-export function dayBoundarySeries(times: number[]) {
-  return boundarySeries(times.flatMap((t, i) => (i > 0 && isMidnight(t) ? [i - 0.15] : [])));
+// local midnights inside the horizon
+export function midnights(start: number, end: number): number[] {
+  const res: number[] = [];
+  const day = new Date(start);
+  day.setHours(24, 0, 0, 0);
+  for (; day.getTime() < end; day.setDate(day.getDate() + 1)) res.push(day.getTime());
+  return res;
+}
+
+// day dividers as lines at midnight. A second time axis for them ticks hourly in windows
+// without a midnight
+export function dayDividers(start: number, end: number) {
+  return {
+    type: "line",
+    data: [] as number[],
+    silent: true,
+    markLine: {
+      silent: true,
+      z: 1,
+      symbol: "none",
+      label: { show: false },
+      lineStyle: { color: colors.muted || "", type: "solid" },
+      data: midnights(start, end).map((xAxis) => ({ xAxis })),
+    },
+  };
 }

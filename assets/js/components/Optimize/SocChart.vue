@@ -24,12 +24,12 @@ import {
 } from "../Forecast/echarts";
 import colors, { dimColor } from "@/colors";
 import formatter from "@/mixins/formatter";
-import echartsChart from "@/mixins/echartsChart";
 import { is12hFormat } from "@/units";
 import type { EvoptData } from "./TimeSeriesDataTable.vue";
 import LegendList from "../Sessions/LegendList.vue";
 import type { Legend } from "../Sessions/types";
-import { slotTimes, transientHoverDot } from "./chart";
+import { dayDividers, slotTimes, transientHoverDot } from "./chart";
+import zoomChart, { insideZoom, labelStepHours } from "./zoom";
 
 export interface SocChartEntry {
 	index: number; // index into evopt.res.batteries
@@ -42,7 +42,7 @@ export interface SocChartEntry {
 export default defineComponent({
 	name: "SocChart",
 	components: { LegendList },
-	mixins: [formatter, echartsChart],
+	mixins: [formatter, zoomChart],
 	props: {
 		evopt: {
 			type: Object as PropType<EvoptData>,
@@ -102,8 +102,8 @@ export default defineComponent({
 			return "For now, only the first goal is planned. The plan will adapt once it has passed.";
 		},
 		xAxes(): Record<string, unknown>[] {
-			const stepHours = is12hFormat() ? 6 : 4;
-			const [hourAxis, dayAxis] = forecastXAxes(
+			const stepHours = labelStepHours(this.range, is12hFormat() ? 6 : 4);
+			const [hourAxis] = forecastXAxes(
 				this.times[0] ?? 0,
 				this.endTime,
 				this.hourShort,
@@ -113,7 +113,7 @@ export default defineComponent({
 			if (!this.showXAxis) {
 				(hourAxis as Record<string, unknown>)["axisLabel"] = { show: false };
 			}
-			return [hourAxis, dayAxis];
+			return [hourAxis];
 		},
 		chartOption(): Record<string, unknown> {
 			return {
@@ -126,6 +126,8 @@ export default defineComponent({
 					left: 0,
 					borderWidth: 0,
 				},
+				// the y axis stays 0-100, lines are clipped at the grid
+				dataZoom: [insideZoom(this.range, this.horizon, [0])],
 				tooltip: {
 					trigger: "axis",
 					axisPointer: {
@@ -147,6 +149,7 @@ export default defineComponent({
 					},
 				}),
 				series: [
+					dayDividers(this.horizon.start, this.horizon.end),
 					{
 						type: "line",
 						z: 3,
@@ -225,7 +228,7 @@ export default defineComponent({
 			const prev = this.socSeries[p.dataIndex - 1]?.[0] ?? -Infinity;
 			const goal = this.goals.find(([gt]) => gt > prev && gt <= p.axisValue);
 			const t = new Date(goal ? goal[0] : p.axisValue);
-			const head = `${this.weekdayShort(t)} ${this.fmtHourMinute(t)}`;
+			const head = this.fmtPointTitle(t);
 			if (!goal) {
 				return tooltipTable(head, [{ values: [this.fmtPercentage(v)] }]);
 			}

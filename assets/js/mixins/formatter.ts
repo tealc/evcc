@@ -425,6 +425,18 @@ export default defineComponent({
         month: "narrow",
       }).format(date);
     },
+    // chart tooltip title of a slot: "<weekday date> · <start> – <end>" from the shared
+    // formatters (date format and 12h settings apply), both days when it crosses midnight
+    fmtSlotTitle(start: Date, end: Date) {
+      if (start.toDateString() !== end.toDateString()) {
+        return `${this.fmtDayMonth(start)} ${this.fmtHourMinute(start)} – ${this.fmtDayMonth(end)} ${this.fmtHourMinute(end)}`;
+      }
+      return `${this.fmtDayMonth(start)} · ${this.fmtTimeSlot(start, end.getTime() - start.getTime())}`;
+    },
+    // chart tooltip title of a point in time: "<weekday date> · <time>"
+    fmtPointTitle(date: Date) {
+      return `${this.fmtDayMonth(date)} · ${this.fmtHourMinute(date)}`;
+    },
     // "HH:mm – HH:mm" honoring 12h/24h preference.
     fmtTimeSlot(start: Date, durationMs: number) {
       const end = new Date(start.getTime() + durationMs);

@@ -56,6 +56,15 @@
 						edge-to-edge
 						class="box-pull-out mb-4"
 					>
+						<template v-if="zoomed" #actions>
+							<button
+								type="button"
+								class="btn btn-sm btn-link p-0"
+								@click="resetZoom"
+							>
+								{{ $t("general.resetZoom") }}
+							</button>
+						</template>
 						<ChargeChart
 							:evopt="evopt"
 							:battery-details="evopt.details.batteryDetails"
@@ -64,6 +73,9 @@
 							:timestamp="evopt.details.timestamp[0]"
 							:battery-colors="batteryColors"
 							:device-colors="deviceColors"
+							:range="range"
+							:horizon="horizon"
+							@update:range="setZoom"
 						/>
 					</Card>
 
@@ -87,6 +99,15 @@
 						edge-to-edge
 						class="box-pull-out mb-4"
 					>
+						<template v-if="zoomed" #actions>
+							<button
+								type="button"
+								class="btn btn-sm btn-link p-0"
+								@click="resetZoom"
+							>
+								{{ $t("general.resetZoom") }}
+							</button>
+						</template>
 						<div
 							v-for="(entry, idx) in socEntries"
 							:key="entry.index"
@@ -97,6 +118,9 @@
 								:entry="entry"
 								:timestamp="evopt.details.timestamp[0]"
 								:show-x-axis="idx === socEntries.length - 1"
+								:range="range"
+								:horizon="horizon"
+								@update:range="setZoom"
 							/>
 						</div>
 					</Card>
@@ -200,6 +224,7 @@ import CopyButton from "../components/Optimize/CopyButton.vue";
 import PlanExplanation from "../components/Optimize/PlanExplanation.vue";
 import { formatCompactJson } from "../components/Optimize/compactJson";
 import { loadpointTitle, type Titled } from "../components/Optimize/chart";
+import { clampRange, horizonOf, isZoomed, type ZoomRange } from "../components/Optimize/zoom";
 import api from "../api";
 import store from "../store";
 import formatter from "../mixins/formatter";
@@ -233,6 +258,8 @@ export default defineComponent({
 			pending: false,
 			explaining: false,
 			explainError: "",
+			// zoomed window of the plan horizon, shared by all charts. Null shows everything
+			zoom: null as ZoomRange | null,
 		};
 	},
 	head() {
@@ -331,6 +358,19 @@ export default defineComponent({
 				...entries.filter((e) => e.type === "battery"),
 			];
 		},
+		horizon(): ZoomRange {
+			return horizonOf(
+				this.evopt?.details.timestamp[0] || "",
+				this.evopt?.req.time_series.dt || []
+			);
+		},
+		// follows the clock time when the plan moves on
+		range(): ZoomRange {
+			return clampRange(this.zoom, this.horizon);
+		},
+		zoomed(): boolean {
+			return isZoomed(this.range, this.horizon);
+		},
 		timeSeriesSubtitle(): string {
 			return `${this.evopt?.req.time_series.dt.length || 0} steps ・ ${this.horizonHours} h horizon`;
 		},
@@ -350,6 +390,12 @@ export default defineComponent({
 	methods: {
 		loadpointColor(detail: Titled): string {
 			return this.loadpointPalette[loadpointTitle(detail)] || "";
+		},
+		setZoom(range: ZoomRange) {
+			this.zoom = isZoomed(range, this.horizon) ? range : null;
+		},
+		resetZoom() {
+			this.zoom = null;
 		},
 		optimizeNow() {
 			this.pending = true;

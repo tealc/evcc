@@ -9,8 +9,8 @@
 import { defineComponent, type PropType } from "vue";
 import {
 	axisNameStyle,
-	boundaryAxis,
 	FONT_FAMILY,
+	forecastXAxes,
 	forecastYAxis,
 	lineCasing,
 	tooltipStyle,
@@ -21,23 +21,22 @@ import {
 import type { EvoptData } from "./TimeSeriesDataTable.vue";
 import type { BatteryDetail, DemandDetail, DeviceColors } from "@/types/evcc";
 import formatter, { POWER_UNIT } from "@/mixins/formatter";
-import echartsChart from "@/mixins/echartsChart";
 import colors from "@/colors";
+import { is12hFormat } from "@/units";
 import { energyAxisScale, type EnergyAxisScale } from "@/utils/energyAxis";
 import LegendList from "../Sessions/LegendList.vue";
 import type { Legend } from "../Sessions/types";
 import {
 	slotTimes,
-	slotXAxis,
 	slotParents,
 	splitSlots,
-	dayBoundarySeries,
-	formatSlotRange,
 	whToKW,
 	loadpointTitle,
 	demandTitle,
+	dayDividers,
 	transientHoverDot,
 } from "./chart";
+import zoomChart, { hasMouse, insideZoom, labelStepHours, sliderZoom } from "./zoom";
 
 const GRID_LABEL = "Grid Power";
 const SOLAR_LABEL = "Solar Forecast";
@@ -53,7 +52,7 @@ interface StackEntry {
 export default defineComponent({
 	name: "ChargeChart",
 	components: { LegendList },
-	mixins: [formatter, echartsChart],
+	mixins: [formatter, zoomChart],
 	props: {
 		evopt: {
 			type: Object as PropType<EvoptData>,
@@ -116,6 +115,13 @@ export default defineComponent({
 		times(): number[] {
 			return slotTimes(this.timestamp, this.dt);
 		},
+		// a slot's bar and points sit at its middle, the axis is time like the SoC charts'
+		centers(): number[] {
+			return this.times.map((t, i) => t + (this.dt[i] || 0) * 500);
+		},
+		slider(): boolean {
+			return hasMouse();
+		},
 		gridPower(): number[] {
 			const gridImport = this.split(this.evopt.res.grid_import || []);
 			const gridExport = this.split(this.evopt.res.grid_export || []);
@@ -129,7 +135,9 @@ export default defineComponent({
 		axisScale(): EnergyAxisScale {
 			const peak = Math.max(
 				0,
-				...this.chartSeries.flatMap((s) => (s["data"] as number[]).map(Math.abs))
+				...this.chartSeries.flatMap((s) =>
+					(s["data"] as [number, number][]).map(([, v]) => Math.abs(v))
+				)
 			);
 			return energyAxisScale(peak * 1000);
 		},
@@ -138,7 +146,7 @@ export default defineComponent({
 				name: GRID_LABEL,
 				type: "line",
 				z: 4,
-				data: this.gridPower,
+				data: this.atSlots(this.gridPower),
 				smooth: 0.2,
 				...transientHoverDot(colors.grid || ""),
 				lineStyle: { color: colors.grid || "", ...lineDefaults },
@@ -147,13 +155,13 @@ export default defineComponent({
 				name: SOLAR_LABEL,
 				type: "line",
 				z: 4,
-				data: this.split(this.evopt.req.time_series.ft).map(this.toKW),
+				data: this.atSlots(this.split(this.evopt.req.time_series.ft).map(this.toKW)),
 				smooth: 0.2,
 				...transientHoverDot(colors.forecast || ""),
 				lineStyle: { color: colors.forecast || "", ...lineDefaults },
 			};
 			const series: Record<string, unknown>[] = [
-				dayBoundarySeries(this.times),
+				dayDividers(this.horizon.start, this.horizon.end),
 				lineCasing(grid, 3),
 				grid,
 				lineCasing(solar, 3),
@@ -166,18 +174,40 @@ export default defineComponent({
 					// large mode despite the outdated TODO in echarts' barGrid layout
 					large: true,
 					largeThreshold: 0,
-					data: e.data,
+					data: this.atSlots(e.data),
 					itemStyle: { color: e.color },
 					emphasis: { disabled: true },
 				})),
 			];
 			return series;
 		},
+		xAxes(): Record<string, unknown>[] {
+			const [hourAxis] = forecastXAxes(
+				this.horizon.start,
+				this.horizon.end,
+				this.hourShort,
+				this.weekdayShort,
+				labelStepHours(this.range, is12hFormat() ? 6 : 4)
+			);
+			// no extra room for the edge bars, unzoomed the axis must match the SoC charts
+			return [{ ...hourAxis, containShape: false }];
+		},
 		chartOption(): Record<string, unknown> {
 			return {
 				animation: false,
 				textStyle: { fontFamily: FONT_FAMILY },
-				grid: { top: 28, right: 36, bottom: 34, left: 0, borderWidth: 0 },
+				grid: {
+					top: 28,
+					right: 36,
+					bottom: this.slider ? 56 : 34,
+					left: 0,
+					borderWidth: 0,
+				},
+				// filtering rescales the kW axis to the window
+				dataZoom: [
+					insideZoom(this.range, this.horizon, [0], "filter"),
+					...(this.slider ? [sliderZoom(this.range, this.horizon, [0], "filter")] : []),
+				],
 				tooltip: {
 					trigger: "axis",
 					axisPointer: {
@@ -187,7 +217,7 @@ export default defineComponent({
 					...tooltipStyle(colors.text || ""),
 					formatter: this.tooltipFormatter,
 				},
-				xAxis: [slotXAxis(this.times, this.weekdayShort), boundaryAxis(this.times.length)],
+				xAxis: this.xAxes,
 				yAxis: forecastYAxis({
 					min: undefined,
 					position: "right",
@@ -221,6 +251,9 @@ export default defineComponent({
 		},
 	},
 	methods: {
+		atSlots(values: number[]): [number, number][] {
+			return values.map((v, i) => [this.centers[i] ?? 0, v]);
+		},
 		split(values: number[]): number[] {
 			return splitSlots(values, this.parents);
 		},
@@ -252,16 +285,18 @@ export default defineComponent({
 			});
 		},
 		tooltipFormatter(
-			params: { dataIndex: number; seriesName?: string; value?: number }[]
+			params: { dataIndex: number; seriesName?: string; value?: [number, number] }[]
 		): string {
 			const arr = Array.isArray(params) ? params : [params];
 			if (!arr.length) return "";
-			const head = formatSlotRange(this.times, this.dt, arr[0]!.dataIndex);
+			const start = new Date(this.times[arr[0]!.dataIndex] ?? 0);
+			const end = new Date(start.getTime() + (this.dt[arr[0]!.dataIndex] || 0) * 1000);
+			const head = this.fmtSlotTitle(start, end);
 			const rows: TooltipRow[] = arr
-				.filter((p) => p.value != null && !Number.isNaN(p.value))
+				.filter((p) => p.value?.[1] != null && !Number.isNaN(p.value[1]))
 				.filter((p) => !p.seriesName?.endsWith("-casing"))
 				.map((p) => {
-					const value = p.value as number;
+					const value = p.value![1];
 					if (p.seriesName === GRID_LABEL) {
 						const name = value > 0 ? "Grid Import" : value < 0 ? "Grid Export" : "Grid";
 						return { name, values: [this.formatValue(Math.abs(value))] };

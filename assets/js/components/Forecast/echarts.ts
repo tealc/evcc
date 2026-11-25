@@ -12,6 +12,8 @@ import {
   MarkAreaComponent,
   GraphicComponent,
   AxisPointerComponent,
+  DataZoomInsideComponent,
+  DataZoomSliderComponent,
 } from "echarts/components";
 import { SVGRenderer } from "echarts/renderers";
 
@@ -25,6 +27,8 @@ echarts.use([
   MarkLineComponent,
   MarkAreaComponent,
   GraphicComponent,
+  DataZoomInsideComponent,
+  DataZoomSliderComponent,
   SVGRenderer,
 ]);
 

@@ -389,3 +389,19 @@ describe("relativeDayName", () => {
     expect(fmt.relativeDayName(day(2))).toBeNull();
   });
 });
+
+describe("chart tooltip titles", () => {
+  // tests run with TZ=Europe/Berlin; 25.11.2025 is a Tuesday
+  const at = (d: number, h: number, m = 0) => new Date(2025, 10, d, h, m);
+  const norm = (s: string) => s.replace(/[  ]/g, " ");
+
+  test("slot and point carry weekday and date", () => {
+    expect(norm(fmt.fmtSlotTitle(at(25, 13, 45), at(25, 14)))).eq("Di., 25. Nov. · 13:45 – 14:00");
+    expect(norm(fmt.fmtPointTitle(at(25, 0, 15)))).eq("Di., 25. Nov. · 00:15");
+  });
+  test("slot across midnight names both days", () => {
+    expect(norm(fmt.fmtSlotTitle(at(25, 23), at(26, 0)))).eq(
+      "Di., 25. Nov. 23:00 – Mi., 26. Nov. 00:00"
+    );
+  });
+});

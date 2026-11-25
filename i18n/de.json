@@ -1623,6 +1623,38 @@
       "permanent": "bleibt dauerhaft an"
     },
     "chargingPlan": {
+      "absences": {
+        "add": "Abwesenheit hinzufügen",
+        "cancel": "Abbrechen",
+        "description": "Wann ist das Fahrzeug üblicherweise unterwegs? Das Laden wird um diese Zeiten herum geplant. Ladeziele bleiben unverändert.",
+        "energy": "Erwarteter Verbrauch",
+        "energyHelp": "Energie, die unterwegs verbraucht wird. Leer lassen, wenn unbekannt.",
+        "goalHint": "Ziel liegt in einer Abwesenheit – Laden wird davor eingeplant.",
+        "invalidRange": "Rückkehr muss nach der Abfahrt liegen.",
+        "leave": "Abfahrt",
+        "nextDay": "Endet am Folgetag.",
+        "notConnected": "Wirkt, sobald das Fahrzeug angesteckt ist.",
+        "occasion": "Anlass",
+        "occasions": {
+          "other": "Sonstiges",
+          "school": "Schule",
+          "shopping": "Einkaufen",
+          "sport": "Sport",
+          "trip": "Ausflug",
+          "vacation": "Urlaub",
+          "visit": "Besuch",
+          "work": "Arbeit"
+        },
+        "once": "einmalig",
+        "optional": "optional",
+        "repeat": "Wiederholung",
+        "return": "Rückkehr",
+        "save": "Speichern",
+        "selectVehicle": "Fahrzeug wählen",
+        "title": "Abwesenheiten",
+        "vehicle": "Fahrzeug",
+        "weekly": "wöchentlich"
+      },
       "active": "Aktiv",
       "addRepeatingPlan": "Wiederholenden Plan hinzufügen",
       "day": "Tag",

@@ -32,6 +32,47 @@
 						@updated="updateRepeatingPlans"
 					/>
 				</div>
+				<div v-if="vehicle?.name || absenceVehicles.length" data-testid="absences-section">
+					<hr class="mt-5" />
+					<h5>
+						<div class="inner mb-3" data-testid="absences-title">
+							{{ $t("main.chargingPlan.absences.title") }}
+						</div>
+					</h5>
+					<div v-if="absenceVehicles.length" class="mb-3">
+						<div class="d-flex align-items-center gap-2">
+							<label :for="`absence-vehicle-lp${id}`" class="evcc-gray text-nowrap">
+								{{ $t("main.chargingPlan.absences.vehicle") }}
+							</label>
+							<select
+								:id="`absence-vehicle-lp${id}`"
+								class="form-select form-select-sm w-auto mw-100"
+								:value="absenceVehicleName || ''"
+								data-testid="absence-vehicle"
+								@change="selectAbsenceVehicle"
+							>
+								<option v-if="!absenceVehicleName" value="" disabled>
+									{{ $t("main.chargingPlan.absences.selectVehicle") }}
+								</option>
+								<option v-for="v in absenceVehicles" :key="v.name" :value="v.name">
+									{{ v.title }}
+								</option>
+							</select>
+						</div>
+						<small class="evcc-gray d-block mt-1" data-testid="absence-not-connected">
+							{{ $t("main.chargingPlan.absences.notConnected") }}
+						</small>
+					</div>
+					<ChargingPlansAbsences
+						v-if="vehicle?.name || absenceVehicleName"
+						:key="vehicle?.name || absenceVehicleName"
+						:id="id"
+						:absences="absences"
+						:staticPlan="staticPlan"
+						:repeatingPlans="socBasedPlanning ? repeatingPlans : []"
+						@updated="updateAbsences"
+					/>
+				</div>
 				<ChargingPlanStrategy
 					:id="id"
 					:precondition="effectivePlanStrategy?.precondition"
@@ -64,6 +105,7 @@ import Preview from "./Preview.vue";
 import PlanStaticSettings from "./PlanStaticSettings.vue";
 import ChargingPlanStrategy from "./PlanStrategy.vue";
 import RepeatingSettings from "./PlansRepeatingSettings.vue";
+import AbsencesSettings from "./PlansAbsences.vue";
 import Warnings from "./Warnings.vue";
 import formatter from "@/mixins/formatter";
 import collector from "@/mixins/collector";
@@ -72,6 +114,7 @@ import deepEqual from "@/utils/deepEqual";
 import { debounceLeading } from "@/utils/debounceLeading";
 import { defineComponent, type PropType } from "vue";
 import type {
+	Absence,
 	CURRENCY,
 	UiForecast,
 	PlanResponse,
@@ -93,6 +136,7 @@ export default defineComponent({
 		ChargingPlanStaticSettings: PlanStaticSettings,
 		ChargingPlanStrategy,
 		ChargingPlansRepeatingSettings: RepeatingSettings,
+		ChargingPlansAbsences: AbsencesSettings,
 		ChargingPlanWarnings: Warnings,
 	},
 	mixins: [formatter, collector],
@@ -100,6 +144,13 @@ export default defineComponent({
 		id: [String, Number],
 		staticPlan: Object as PropType<StaticPlan>,
 		repeatingPlans: { type: Array as PropType<RepeatingPlan[]>, default: () => [] },
+		absences: { type: Array as PropType<Absence[]>, default: () => [] },
+		// vehicles to pick from when none is connected
+		absenceVehicles: {
+			type: Array as PropType<{ name: string; title: string }[]>,
+			default: () => [],
+		},
+		absenceVehicleName: String,
 		effectiveLimitSoc: Number,
 		effectivePlanTime: String,
 		effectivePlanSoc: Number,
@@ -124,6 +175,8 @@ export default defineComponent({
 		"static-plan-removed",
 		"static-plan-updated",
 		"repeating-plans-updated",
+		"absences-updated",
+		"absence-vehicle-changed",
 		"plan-strategy-updated",
 	],
 	data() {
@@ -314,6 +367,12 @@ export default defineComponent({
 		},
 		updateRepeatingPlans(plans: RepeatingPlan[]): void {
 			this.$emit("repeating-plans-updated", plans);
+		},
+		selectAbsenceVehicle(e: Event): void {
+			this.$emit("absence-vehicle-changed", (e.target as HTMLSelectElement).value);
+		},
+		updateAbsences(absences: Absence[]): void {
+			this.$emit("absences-updated", absences);
 		},
 		previewStaticPlan(plan: StaticPlan): void {
 			this.staticPlanPreview = plan;

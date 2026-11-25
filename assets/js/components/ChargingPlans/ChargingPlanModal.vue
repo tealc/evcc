@@ -14,6 +14,9 @@
 					:id="id"
 					:staticPlan="staticPlan"
 					:repeatingPlans="repeatingPlans"
+					:absences="absences"
+					:absenceVehicles="absenceVehicleOptions"
+					:absenceVehicleName="absenceVehicle?.name"
 					:effectiveLimitSoc="loadpoint?.effectiveLimitSoc"
 					:effectivePlanTime="loadpoint?.effectivePlanTime ?? undefined"
 					:effectivePlanSoc="loadpoint?.effectivePlanSoc"
@@ -36,6 +39,8 @@
 					@static-plan-updated="updateStaticPlan"
 					@static-plan-removed="removeStaticPlan"
 					@repeating-plans-updated="updateRepeatingPlans"
+					@absences-updated="updateAbsences"
+					@absence-vehicle-changed="selectAbsenceVehicle"
 					@plan-strategy-updated="updatePlanStrategy"
 				/>
 			</div>
@@ -48,7 +53,9 @@ import { defineComponent, type PropType } from "vue";
 import GenericModal from "../Helper/GenericModal.vue";
 import PlansSettings from "./PlansSettings.vue";
 import api from "@/api";
+import { loadAbsenceVehicle, pickAbsenceVehicle, storeAbsenceVehicle } from "./absences";
 import type {
+	Absence,
 	CURRENCY,
 	UiForecast,
 	PlanStrategy,
@@ -78,6 +85,7 @@ export default defineComponent({
 		return {
 			isModalVisible: false,
 			id: undefined as string | number | undefined,
+			selectedAbsenceVehicle: "",
 		};
 	},
 	computed: {
@@ -129,6 +137,21 @@ export default defineComponent({
 			}
 			return [];
 		},
+		// the connected vehicle, otherwise the one picked in the absences section
+		absenceVehicle(): Vehicle | undefined {
+			if (this.vehicle) return this.vehicle;
+			return this.vehicles.find((v) => v.name && v.name === this.selectedAbsenceVehicle);
+		},
+		// selector options, only without a connected vehicle
+		absenceVehicleOptions(): { name: string; title: string }[] {
+			if (this.vehicle) return [];
+			return this.vehicles
+				.filter((v) => v.name)
+				.map((v) => ({ name: v.name!, title: v.title || v.name! }));
+		},
+		absences(): Absence[] {
+			return this.absenceVehicle?.absences || [];
+		},
 	},
 	methods: {
 		open(loadpointId?: string | number) {
@@ -137,6 +160,10 @@ export default defineComponent({
 			modalRef?.open();
 		},
 		modalVisible(): void {
+			this.selectedAbsenceVehicle = pickAbsenceVehicle(
+				this.absenceVehicleOptions.map((v) => v.name),
+				loadAbsenceVehicle(this.id)
+			);
 			this.isModalVisible = true;
 		},
 		modalInvisible(): void {
@@ -161,6 +188,15 @@ export default defineComponent({
 		},
 		updateRepeatingPlans(plans: RepeatingPlan[]): void {
 			api.post(`${this.apiVehicle}plan/repeating`, plans);
+		},
+		updateAbsences(absences: Absence[]): void {
+			const name = this.absenceVehicle?.name;
+			if (!name) return;
+			api.post(`vehicles/${name}/absences`, absences);
+		},
+		selectAbsenceVehicle(name: string): void {
+			this.selectedAbsenceVehicle = name;
+			storeAbsenceVehicle(this.id, name);
 		},
 		updatePlanStrategy(strategy: PlanStrategy): void {
 			if (this.loadpoint?.socBasedPlanning) {

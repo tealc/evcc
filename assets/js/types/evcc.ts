@@ -1329,6 +1329,35 @@ export interface RepeatingPlan {
   active: boolean;
 }
 
+/** A time window during which a vehicle is away and cannot be charged. */
+export interface Absence {
+  /** Client-generated id, unique per vehicle. */
+  id: string;
+  /** Absence is active. */
+  active: boolean;
+  /** Occasion of the absence. */
+  occasion: "work" | "school" | "shopping" | "sport" | "visit" | "trip" | "vacation" | "other";
+  /** Weekly absence if true, one-time absence otherwise. */
+  repeat: boolean;
+  /** Repeat only. Weekdays the absence starts on. 0 is Sunday, 6 is Saturday. */
+  weekdays?: number[];
+  /** Repeat only. Start time in HH:MM format, aligned to 15 minutes. */
+  start?: string;
+  /** Repeat only. End time in HH:MM format, aligned to 15 minutes. An end at or before start ends the next day. */
+  end?: string;
+  /** One-time only. Start as RFC3339 timestamp, aligned to 15 minutes. */
+  from?: string;
+  /** One-time only. End as RFC3339 timestamp, aligned to 15 minutes, after from. */
+  to?: string;
+  /** Time zone of a repeating absence, like Europe/Berlin. */
+  tz: string;
+  /** Expected energy used while away in kWh. 0 is unknown. */
+  energy: number;
+}
+
+/** Occasion preset of an absence. */
+export type AbsenceOccasion = Absence["occasion"];
+
 export interface PlanWrapper {
   planId: number;
   planTime: Date;
@@ -1398,6 +1427,8 @@ export interface Vehicle {
   repeatingPlans: RepeatingPlan[] | null;
   /** Charging plan strategy. */
   planStrategy: PlanStrategy;
+  /** Absence windows of the vehicle. */
+  absences: Absence[];
   /** Vehicle title for UI display. */
   title: string;
   /** Feature flags of the vehicle implementation. */

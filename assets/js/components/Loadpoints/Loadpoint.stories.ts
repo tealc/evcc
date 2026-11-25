@@ -89,6 +89,7 @@ const baseState = {
       capacity: 8,
       features: ["Offline"],
       repeatingPlans: [],
+      absences: [],
       planStrategy: {
         continuous: false,
         precondition: 0,
@@ -101,6 +102,7 @@ const baseState = {
       capacity: 80,
       features: ["Offline"],
       repeatingPlans: [],
+      absences: [],
       planStrategy: {
         continuous: true,
         precondition: 0,

@@ -1623,6 +1623,38 @@
       "permanent": "stays on permanently"
     },
     "chargingPlan": {
+      "absences": {
+        "add": "Add absence",
+        "cancel": "Cancel",
+        "description": "When is the vehicle usually away? Charging is planned around these times. Goals are not affected.",
+        "energy": "Expected consumption",
+        "energyHelp": "Energy used while away. Leave empty if unknown.",
+        "goalHint": "Goal lies within an absence – charging will be scheduled before it.",
+        "invalidRange": "Return must be after departure.",
+        "leave": "Departure",
+        "nextDay": "Ends on the following day.",
+        "notConnected": "Takes effect once the vehicle is plugged in.",
+        "occasion": "Occasion",
+        "occasions": {
+          "other": "Other",
+          "school": "School",
+          "shopping": "Shopping",
+          "sport": "Sport",
+          "trip": "Trip",
+          "vacation": "Vacation",
+          "visit": "Visit",
+          "work": "Work"
+        },
+        "once": "one-time",
+        "optional": "optional",
+        "repeat": "Repeat",
+        "return": "Return",
+        "save": "Save",
+        "selectVehicle": "Select vehicle",
+        "title": "Absences",
+        "vehicle": "Vehicle",
+        "weekly": "weekly"
+      },
       "active": "Active",
       "addRepeatingPlan": "Add repeating plan",
       "day": "Day",

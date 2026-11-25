@@ -2,6 +2,7 @@ import ChargeChart from "./ChargeChart.vue";
 import Card from "../Helper/Card.vue";
 import type { Meta, StoryFn } from "@storybook/vue3";
 import {
+  absenceDetails,
   batteryColors,
   batteryDetails,
   carport,
@@ -54,4 +55,13 @@ HeatingAndUnmodelled.args = {
   ...base,
   evopt: evopt([home, carport, heatPump]),
   demandDetails: [home, carport, heatPump],
+};
+
+// vehicle away in the morning and afternoon: hatched bands behind the bars
+export const VehicleAbsences = Template.bind({});
+VehicleAbsences.args = {
+  ...base,
+  batteryDetails: absenceDetails,
+  evopt: evopt([home, heatPump]),
+  demandDetails: [home, heatPump],
 };

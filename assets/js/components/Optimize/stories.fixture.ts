@@ -52,6 +52,25 @@ export const batteryDetails: BatteryDetail[] = [
   { type: "battery", title: "Home Battery", name: "battery", capacity: 10 },
 ];
 
+// vehicle away 07:30–10:30 (commute, 4 kWh) and 16:00–18:00 (sport, no energy given)
+const awayWindows = [
+  { from: 7.5, to: 10.5, wh: 4000 },
+  { from: 16, to: 18, wh: 0 },
+];
+export const vehicleAvail = hours.map((h) =>
+  awayWindows.some((w) => h >= w.from && h < w.to) ? 0 : 1
+);
+export const vehicleAway = hours.map((h) => {
+  const w = awayWindows.find((w) => h >= w.from && h < w.to);
+  return w ? w.wh / ((w.to - w.from) / SLOT_H) : 0;
+});
+
+// the vehicle with its absences
+export const absenceDetails: BatteryDetail[] = [
+  { ...batteryDetails[0]!, cAvail: vehicleAvail, eAway: vehicleAway },
+  batteryDetails[1]!,
+];
+
 // gt is the sum of the profiles
 export function evopt(profiles: DemandDetail[]): EvoptData {
   const gt = hours.map((_, i) => profiles.reduce((sum, p) => sum + (p.values[i] || 0), 0));

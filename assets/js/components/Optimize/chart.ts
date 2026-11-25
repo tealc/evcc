@@ -1,5 +1,5 @@
 import { hoverDot } from "../Forecast/echarts";
-import colors from "@/colors";
+import colors, { setAlpha } from "@/colors";
 import type { DemandDetail } from "@/types/evcc";
 
 export type Titled = { title?: string; name?: string };
@@ -82,4 +82,90 @@ export function dayDividers(start: number, end: number) {
       data: midnights(start, end).map((xAxis) => ({ xAxis })),
     },
   };
+}
+
+// contiguous unavailable (away) time range, epoch ms
+export interface AwayRange {
+  start: number;
+  end: number;
+}
+
+// away ranges from the per request slot availability (0 = away) and the slot start times
+export function awayRanges(
+  cAvail: number[] | undefined,
+  times: number[],
+  dt: number[]
+): AwayRange[] {
+  if (!cAvail?.some((v) => v === 0)) return [];
+  const ranges: AwayRange[] = [];
+  cAvail.forEach((v, i) => {
+    const start = times[i];
+    if (v !== 0 || start === undefined) return;
+    const end = start + (dt[i] || 0) * 1000;
+    const last = ranges[ranges.length - 1];
+    if (last && last.end === start) last.end = end;
+    else ranges.push({ start, end });
+  });
+  return ranges;
+}
+
+// per chart slot away flag, empty when the battery carries no availability. Request slots longer
+// than a quarter hour are split like the chart axis, so indices match the chart slots.
+export function awaySlots(cAvail: number[] | undefined, dt: number[]): boolean[] {
+  if (!cAvail?.some((v) => v === 0)) return [];
+  return slotParents(dt).map((p) => cAvail[p] === 0);
+}
+
+export interface AbsenceRow {
+  key: "away" | "awayEnergy";
+  display: string[];
+  nums: number[];
+}
+
+// table rows per request slot: away marker and energy used while away (kWh, only if any)
+export function absenceRows(
+  cAvail: number[] | undefined,
+  eAway: number[] | undefined,
+  fmtKWh: (kWh: number) => string,
+  marker = "×"
+): AbsenceRow[] {
+  if (!cAvail?.some((v) => v === 0)) return [];
+  const rows: AbsenceRow[] = [
+    {
+      key: "away",
+      display: cAvail.map((v) => (v === 0 ? marker : "")),
+      nums: cAvail.map((v) => (v === 0 ? 1 : 0)),
+    },
+  ];
+  if (eAway?.some((v) => v > 0)) {
+    const nums = cAvail.map((_, i) => (eAway[i] || 0) / 1000);
+    rows.push({
+      key: "awayEnergy",
+      display: nums.map((kWh) => (kWh > 0 ? fmtKWh(kWh) : "")),
+      nums,
+    });
+  }
+  return rows;
+}
+
+// light tint with diagonal stripes for away bands, works on light and dark backgrounds
+export function awayPattern(color: string) {
+  const size = 8;
+  const dpr = window.devicePixelRatio || 1;
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = size * dpr;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return setAlpha(color, "1a") || color;
+  ctx.scale(dpr, dpr);
+  ctx.fillStyle = setAlpha(color, "14") || color;
+  ctx.fillRect(0, 0, size, size);
+  ctx.strokeStyle = setAlpha(color, "59") || color;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  for (const o of [-size, 0, size]) {
+    ctx.moveTo(o, size);
+    ctx.lineTo(o + size, 0);
+  }
+  ctx.stroke();
+  return { image: canvas, repeat: "repeat" };
 }

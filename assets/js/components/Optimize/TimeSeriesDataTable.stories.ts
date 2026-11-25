@@ -3,6 +3,7 @@ import Card from "../Helper/Card.vue";
 import { CURRENCY } from "@/types/evcc";
 import type { Meta, StoryFn } from "@storybook/vue3";
 import {
+  absenceDetails,
   batteryColors,
   batteryDetails,
   carport,
@@ -57,4 +58,14 @@ HeatingAndUnmodelled.args = {
   ...base,
   evopt: evopt([home, carport, heatPump]),
   demandDetails: [home, carport, heatPump],
+};
+
+// response view with away rows below the vehicle
+export const VehicleAbsences = Template.bind({});
+VehicleAbsences.args = {
+  ...base,
+  mode: "response" as const,
+  batteryDetails: absenceDetails,
+  evopt: evopt([home, heatPump]),
+  demandDetails: [home, heatPump],
 };

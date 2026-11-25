@@ -1,5 +1,14 @@
 import { describe, expect, test } from "vite-plus/test";
-import { dayDividers, midnights, slotParents, splitSlots } from "./chart";
+import {
+  absenceRows,
+  awayRanges,
+  awaySlots,
+  dayDividers,
+  midnights,
+  slotParents,
+  slotTimes,
+  splitSlots,
+} from "./chart";
 
 describe("splitSlots", () => {
   // partial first slot, a quarter, a clock hour, a half hour cut by a goal
@@ -44,5 +53,68 @@ describe("midnights", () => {
     expect(dayDividers(start, end).markLine.data).toEqual([
       { xAxis: new Date(2025, 10, 26).getTime() },
     ]);
+  });
+});
+
+describe("awayRanges", () => {
+  // partial first slot (7min), two quarters, two clock hours, a quarter
+  const dt = [420, 900, 900, 3600, 3600, 900];
+  const start = new Date(2025, 0, 1, 12, 8).getTime();
+  const times = slotTimes(new Date(start).toISOString(), dt);
+  const end = (i: number) => times[i]! + dt[i]! * 1000;
+
+  test("no availability data or always available", () => {
+    expect(awayRanges(undefined, times, dt)).toEqual([]);
+    expect(awayRanges([1, 1, 1, 1, 1, 1], times, dt)).toEqual([]);
+    expect(awaySlots(undefined, dt)).toEqual([]);
+  });
+
+  test("ranges sit on the slot times and join neighbours", () => {
+    expect(awayRanges([0, 0, 1, 1, 1, 1], times, dt)).toEqual([{ start: times[0], end: end(1) }]);
+    expect(awayRanges([1, 1, 0, 0, 1, 0], times, dt)).toEqual([
+      { start: times[2], end: end(3) },
+      { start: times[5], end: end(5) },
+    ]);
+  });
+
+  test("away flag per chart slot, hourly slots expand to quarters", () => {
+    expect(awaySlots([1, 1, 1, 0, 1, 1], dt)).toEqual([
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+    ]);
+  });
+});
+
+describe("absenceRows", () => {
+  const fmt = (kWh: number) => kWh.toFixed(1);
+
+  test("nothing without away slots", () => {
+    expect(absenceRows(undefined, undefined, fmt)).toEqual([]);
+    expect(absenceRows([1, 1], [0, 0], fmt)).toEqual([]);
+  });
+
+  test("away marker only when no energy is given", () => {
+    expect(absenceRows([1, 0, 0], [0, 0, 0], fmt)).toEqual([
+      { key: "away", display: ["", "×", "×"], nums: [0, 1, 1] },
+    ]);
+  });
+
+  test("energy row in kWh", () => {
+    const rows = absenceRows([1, 0, 0], [0, 1500, 500], fmt);
+    expect(rows[1]).toEqual({
+      key: "awayEnergy",
+      display: ["", "1.5", "0.5"],
+      nums: [0, 1.5, 0.5],
+    });
   });
 });

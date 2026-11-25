@@ -2030,6 +2030,12 @@
     "restarting": "Server will be back in a moment.",
     "starting": "Starting server..."
   },
+  "optimize": {
+    "away": "away",
+    "awayEnergy": "Used while away",
+    "awayLegend": "Away – {vehicle}",
+    "awayRow": "Away"
+  },
   "passwordModal": {
     "empty": "Password should not be empty",
     "labelCurrent": "Current password",

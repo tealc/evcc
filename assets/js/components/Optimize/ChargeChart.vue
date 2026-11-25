@@ -35,11 +35,28 @@ import {
 	demandTitle,
 	dayDividers,
 	transientHoverDot,
+	awayPattern,
+	awayRanges,
+	awaySlots,
+	type AwayRange,
 } from "./chart";
 import zoomChart, { hasMouse, insideZoom, labelStepHours, sliderZoom } from "./zoom";
 
 const GRID_LABEL = "Grid Power";
 const SOLAR_LABEL = "Solar Forecast";
+
+// away bands of one vehicle
+interface AwayEntry {
+	label: string;
+	title: string;
+	color: string;
+	ranges: AwayRange[];
+	// per chart slot
+	slots: boolean[];
+	// Wh per chart slot
+	energy: number[];
+	id?: string;
+}
 
 // one stacked bar series, data in kW
 interface StackEntry {
@@ -105,6 +122,27 @@ export default defineComponent({
 				...this.batteryEntries("battery"),
 			];
 		},
+		// vehicles with unavailable slots, from cAvail/eAway of the battery details
+		awayEntries(): AwayEntry[] {
+			const dt = this.evopt.req.time_series.dt;
+			const slots = slotTimes(this.timestamp, dt);
+			return this.batteryDetails.flatMap((detail, index) => {
+				const ranges = awayRanges(detail.cAvail, slots, dt);
+				if (!ranges.length) return [];
+				const title = detail.title || detail.name;
+				return [
+					{
+						label: this.$t("optimize.awayLegend", { vehicle: title }),
+						title,
+						color: this.batteryColors[index] || colors.muted || "",
+						ranges,
+						slots: awaySlots(detail.cAvail, dt),
+						energy: this.split(detail.eAway || []),
+						id: detail.type === "vehicle" ? loadpointTitle(detail) : undefined,
+					},
+				];
+			});
+		},
 		// request slots beyond 48h may be clock hours, the chart shows them as quarters
 		parents(): number[] {
 			return slotParents(this.evopt.req.time_series.dt);
@@ -160,7 +198,21 @@ export default defineComponent({
 				...transientHoverDot(colors.forecast || ""),
 				lineStyle: { color: colors.forecast || "", ...lineDefaults },
 			};
+			// shaded bands behind the bars, on the time axis so they follow the zoom
+			const away = this.awayEntries.map((e) => ({
+				name: e.label,
+				type: "line",
+				data: [] as number[],
+				silent: true,
+				z: 1,
+				markArea: {
+					silent: true,
+					itemStyle: { color: awayPattern(e.color) },
+					data: e.ranges.map((r) => [{ xAxis: r.start }, { xAxis: r.end }]),
+				},
+			}));
 			const series: Record<string, unknown>[] = [
+				...away,
 				dayDividers(this.horizon.start, this.horizon.end),
 				lineCasing(grid, 3),
 				grid,
@@ -246,6 +298,12 @@ export default defineComponent({
 					type: "area" as const,
 					id: e.id,
 				})),
+				...this.awayEntries.map((e) => ({
+					label: e.label,
+					color: e.color,
+					value: "",
+					type: "hatched" as const,
+				})),
 			];
 			return legends;
 		},
@@ -302,6 +360,17 @@ export default defineComponent({
 						return { name, values: [this.formatValue(Math.abs(value))] };
 					}
 					return { name: p.seriesName, values: [this.formatValue(value)] };
+				});
+			const index = arr[0]!.dataIndex;
+			this.awayEntries
+				.filter((e) => e.slots[index])
+				.forEach((e) => {
+					const wh = e.energy[index] || 0;
+					const away = this.$t("optimize.away");
+					rows.push({
+						name: e.title,
+						values: [wh > 0 ? `${away} · ${this.fmtWh(wh, POWER_UNIT.AUTO)}` : away],
+					});
 				});
 			return tooltipTable(head, rows);
 		},

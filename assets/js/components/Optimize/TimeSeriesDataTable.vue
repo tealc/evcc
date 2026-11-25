@@ -63,7 +63,7 @@
 import { defineComponent, type PropType } from "vue";
 import formatter from "@/mixins/formatter";
 import colors from "@/colors";
-import { demandTitle } from "./chart";
+import { absenceRows, demandTitle } from "./chart";
 import type { CURRENCY, BatteryDetail, DemandDetail } from "@/types/evcc";
 
 export interface EvoptData {
@@ -260,10 +260,34 @@ export default defineComponent({
 							aMax: 0.3,
 							ref: 100,
 						},
+						...this.awayRows(i, color),
 					],
 				});
 			});
 			return groups;
+		},
+		// vehicle availability from the battery details: away marker and energy used while away
+		awayRows(index: number, color: string): Row[] {
+			const detail = this.batteryDetails[index];
+			return absenceRows(detail?.cAvail, detail?.eAway, (kWh) => this.fmtNumber(kWh, 1)).map(
+				(row) =>
+					row.key === "away"
+						? {
+								label: `↳ ${this.$t("optimize.awayRow")}`,
+								display: row.display,
+								nums: row.nums,
+								heatColor: color,
+								aMax: 0.35,
+								ref: 1,
+							}
+						: {
+								label: `↳ ${this.$t("optimize.awayEnergy")}`,
+								unit: "kWh",
+								display: row.display,
+								nums: row.nums,
+								heatColor: color,
+							}
+			);
 		},
 		powerRow(label: string, whValues: number[], color: string, opts: Partial<Row> = {}): Row {
 			const dt = this.evopt.req.time_series.dt;

@@ -2030,6 +2030,12 @@
       "start": "Los geht's"
     }
   },
+  "optimize": {
+    "away": "abwesend",
+    "awayEnergy": "Verbrauch unterwegs",
+    "awayLegend": "Abwesend – {vehicle}",
+    "awayRow": "Abwesend"
+  },
   "passwordModal": {
     "empty": "Passwort darf nicht leer sein",
     "labelCurrent": "Aktuelles Passwort",
